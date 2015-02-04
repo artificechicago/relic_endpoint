@@ -1,4 +1,5 @@
 #include <SPI.h>
+#include <RFID.h>
 #include <Ethernet.h>
 #include <EthernetUdp.h>
 #include "CoAP.h"
@@ -13,10 +14,10 @@
 // On Linux Mint, the libraries are in usr/share/arduino/libraries
 #endif
 
-unsigned char mac[] = {
+static const unsigned char mac[] = {
   0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };
 
-unsigned int localPort = 5683;
+static const unsigned int localPort = 5683;
 
 unsigned char incomingBuffer[UDP_TX_PACKET_MAX_SIZE];
 char outgoingBuffer[UDP_TX_PACKET_MAX_SIZE];

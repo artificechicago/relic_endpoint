@@ -11,15 +11,15 @@ event of an attacker with physical access to the machine
 attempting to manipulate the RNG.
 */
 
-#include <Arduino.h>
+#include "VNLN.h"
 
-void vonNeumannNoiseExtractor (unsigned char * dest, int srcPin, int destSize)
+void vonNeumannNoiseExtractor (uint8_t * dest, int destSize, int srcPin)
 {
 	int index;
 	int bitIndex;
-	unsigned char collector;
-	unsigned char pinReading1;
-	unsigned char pinReading2;
+	uint8_t collector;
+	uint8_t pinReading1;
+	uint8_t pinReading2;
 
 	for (index = 0; index < destSize; index++) {
 		

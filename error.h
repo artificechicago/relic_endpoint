@@ -1,5 +1,5 @@
-#ifndef _VOID_ERROR_HANDLING_
-#define _VOID_ERROR_HANDLING_
+#ifndef __VOID_ERROR_HANDLING__
+#define __VOID_ERROR_HANDLING__
 
 #include <stdbool.h>
 

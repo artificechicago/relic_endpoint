@@ -31,13 +31,14 @@ typedef struct _COAP_MSG_ {
 	uint16_t msgID;
 	unsigned char token[8];
 	unsigned char body[52];
-	coapCodeClass (*codeClass) (struct _COAP_MSG_ *);
-	int (*codeDetail) (struct _COAP_MSG_ *);
+	uint8_t msgSize;
 } coapMsg;
+
+// Functions are separated into a vtable/namespace
 
 typedef struct _COAP_MSG_VTABLE_ {
 	coapCodeClass (*codeClass) (struct _COAP_MSG_ *);
-	int (codeDetail) (struct _COAP_MSG_ *);
+	int (*codeDetail) (struct _COAP_MSG_ *);
 } CoAP;
 
 // Exposed functions
