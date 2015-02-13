@@ -3,6 +3,9 @@
 
 #include <stdint.h>
 #include "error.h"
+#include "relic_rng.h"
+
+typedef uint8_t (*RNG)();
 
 // Basic CoAP type definitions
 typedef enum _COAP_MSG_TYPES_ {
@@ -22,7 +25,7 @@ typedef enum _COAP_MSG_CODE_CLASS_ {
 
 typedef struct _COAP_MSG_CODE_ {
 	coapCodeClass codeClass;
-	int codeDetail;
+	uint8_t codeDetail;
 } coapCode;
 
 typedef struct _COAP_MSG_ {
@@ -30,18 +33,26 @@ typedef struct _COAP_MSG_ {
 	unsigned char code;
 	uint16_t msgID;
 	unsigned char token[8];
-	unsigned char body[52];
+	unsigned char body[34];
 	uint8_t msgSize;
 } coapMsg;
 
-// Functions are separated into a vtable/namespace
+typedef struct _PACKED_COAP_MSG_ {
+	unsigned char msg[46];
+	uint8_t size;
+} packedMsg;
 
-typedef struct _COAP_MSG_VTABLE_ {
-	coapCodeClass (*codeClass) (struct _COAP_MSG_ *);
-	int (*codeDetail) (struct _COAP_MSG_ *);
-} CoAP;
+typedef struct _PAYLOAD_BUFFER_ {
+	unsigned char buffer[33];
+	uint8_t size;
+} payloadBuffer;
 
-// Exposed functions
+void initCoAP(RNG rng);
+coapCodeClass CoAP_getCodeClass(struct _COAP_MSG_ *);
+uint8_t CoAP_getCodeDetail(struct _COAP_MSG_ *);
+
+voidError parsePacketToCoAPMsg(struct _COAP_MSG_ *, unsigned char *, size_t);
+
 
 void parseCoapMsg(coapMsg *, char *, uint8_t);
 

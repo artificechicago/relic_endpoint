@@ -1,4 +1,5 @@
 #include "relic_rng.h"
+#include "VNLN.h"
 
 // Cryptographically secure pseudorandom number generator
 // The RNG is initialized with the number of an unused pin.

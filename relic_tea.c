@@ -1,17 +1,16 @@
 #include "relic_tea.h"
 #include "relic_tea_core.h"
-
-// TODO: GenIV()!!
+#include <string.h>
 
 // encrypt and decrypt functions perform the TEA block cipher
 // and are found in relic_tea_core.c
 // This provides an interface for CBC and CBC-MAC mode en/decryption.
 
-static Crypto _relic_tea_interface_;
+static Crypto _relic_tea_interface;
 
 // De/encryption mode functions
 
-void _CBC_ENCRYPT_BASE_MODE (uint32_t * msgIn, size_t len, uint32_t * IV, uint32_t * k, 
+void _CBC_ENCRYPT_BASE_MODE (uint32_t * msgIn, uint16_t len, uint32_t * IV, uint32_t * k, 
 							uint32_t * msgOut, uint32_t * MAC) {
 	/* 
 		Input: msgIn: input message in unsigned 32-bit blocks,
@@ -24,8 +23,8 @@ void _CBC_ENCRYPT_BASE_MODE (uint32_t * msgIn, size_t len, uint32_t * IV, uint32
 	*/
 	uint32_t * chain = IV;
 	uint32_t blockBuffer[2];
-	size_t i;
-	size_t numBlocks = (len - (len % 2)) / 2;
+	uint16_t i;
+	uint16_t numBlocks = (len - (len % 2)) / 2;
 
 	for (i = 0; i < numBlocks; i++) {
 		blockBuffer[0] = *msgIn ^ *chain;
@@ -58,12 +57,12 @@ void _CBC_ENCRYPT_BASE_MODE (uint32_t * msgIn, size_t len, uint32_t * IV, uint32
 	}
 }
 
-void _CBC_DECRYPT_BASE_MODE (uint32_t * msgIn, size_t len, uint32_t * IV, uint32_t * k,
+void _CBC_DECRYPT_BASE_MODE (uint32_t * msgIn, uint16_t len, uint32_t * IV, uint32_t * k,
 							uint32_t * msgOut) {
 	uint32_t * chain = IV;
 	uint32_t blockBuffer[2];
-	size_t i;
-	size_t numBlocks = len / 2;
+	uint16_t i;
+	uint16_t numBlocks = len / 2;
 
 	for (i = 0; i < numBlocks; i++){
 		blockBuffer[0] = *msgIn;
@@ -80,47 +79,57 @@ void _CBC_DECRYPT_BASE_MODE (uint32_t * msgIn, size_t len, uint32_t * IV, uint32
 
 // Interface and set-up functions
 
-void _CBC_Encypt (uint32_t * msg, size_t len) {
-	uint32_t * IV = genIV();
-	_CBC_ENCRYPT_BASE_MODE(_relic_tea_interface->MessageBuffer, 
+void _CBC_Encypt (uint32_t * msg, uint16_t len) {
+	uint32_t IV[2];
+	IV[0] = _relic_tea_interface.rng() << 24 |
+					_relic_tea_interface.rng() << 16 |
+					_relic_tea_interface.rng() << 8  |
+					_relic_tea_interface.rng();
+	IV[1] = _relic_tea_interface.rng() << 24 |
+					_relic_tea_interface.rng() << 16 |
+					_relic_tea_interface.rng() << 8 |
+					_relic_tea_interface.rng();
+
+	_CBC_ENCRYPT_BASE_MODE(_relic_tea_interface.MessageBuffer, 
 							len, 
 							IV, 
-							_relic_tea_interface->key,
-							_relic_tea_interface->MessageBuffer,
+							_relic_tea_interface.key,
+							_relic_tea_interface.MessageBuffer,
 							NULL);
 }
 
-void _CBC_Decrypt (uint32_t * ct, size_t len, uint32_t * IV) {
-	_CBC_DECRYPT_BASE_MODE (_relic_tea_interface->MessageBuffer, 
+void _CBC_Decrypt (uint32_t * ct, uint16_t len, uint32_t * IV) {
+	_CBC_DECRYPT_BASE_MODE (_relic_tea_interface.MessageBuffer, 
 							len,
 							IV, 
-							_relic_tea_interface->key, 
-							_relic_tea_interface->MessageBuffer)
+							_relic_tea_interface.key, 
+							_relic_tea_interface.MessageBuffer);
 }
 
-void _CBC_MAC (uint32_t * msg, size_t len) {
+void _CBC_MAC (uint32_t * msg, uint16_t len) {
 	uint32_t IV[2] = {0x00000000, 0x00000000};
-	_CBC_ENCRYPT_BASE_MODE(_relic_tea_interface->MessageBuffer, 
+	_CBC_ENCRYPT_BASE_MODE(_relic_tea_interface.MessageBuffer, 
 							len, 
 							IV, 
-							_relic_tea_interface->MACKey,
-							_relic_tea_interface->MessageBuffer,
-							_relic_tea_interface->MACBuffer);
+							_relic_tea_interface.MACKey,
+							_relic_tea_interface.MessageBuffer,
+							_relic_tea_interface.MACBuffer);
 }
 
 void cryptoSetNewKey(uint32_t * newKey) {
-	_relic_tea_interface->key[0] = *newKey;
-	_relic_tea_interface->key[1] = *(newKey+1);
-	_relic_tea_interface->key[2] = *(newKey+2);
-	_relic_tea_interface->key[3] = *(newKey+3);
+	_relic_tea_interface.key[0] = *newKey;
+	_relic_tea_interface.key[1] = *(newKey+1);
+	_relic_tea_interface.key[2] = *(newKey+2);
+	_relic_tea_interface.key[3] = *(newKey+3);
 }
 
 Crypto * initCrypto(RNG rng, uint32_t * key) {
-	_relic_tea_interface->rng = rng;
+	_relic_tea_interface.rng = rng;
 	cryptoSetNewKey(key);
+	_relic_tea_interface.encrypt = &_CBC_Encypt;
+	_relic_tea_interface.decrypt = &_CBC_Decrypt;
+	_relic_tea_interface.MAC = &_CBC_MAC;
+
 	return &_relic_tea_interface;
-	_relic_tea_interface->encrypt = &_CBC_Encypt;
-	_relic_tea_interface->decrypt = &_CBC_Decrypt;
-	_relic_tea_interface->MAC = &_CBC_MAC;
 }
 

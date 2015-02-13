@@ -11,31 +11,37 @@ static const unsigned char CODE_DETAIL_MASK = 0x1f; //mask for 00011111
 static const uint8_t MAX_TOKEN_LENGTH = 8;  // RFC 7252 defines lengths 9-15 as an error
 static const uint8_t COAP_HEADER_SIZE = 4;
 
+static RNG rng = NULL;
+
+void initCoAP(RNG r) {
+	rng = r;
+}
+
 // CoAP Message Getters
 
 // Getters for the packed binary header
 
-unsigned char _GET_COAP_MSG_HEADER_VERSION (coapMsg * self)
+unsigned char CoAP_getVersion (coapMsg * msg)
 {
-	return self->header & H_VERSION_MASK >> 6;
+	return msg->header & H_VERSION_MASK >> 6;
 }
 
-coapType _GET_COAP_MSG_HEADER_TYPE_ (coapMsg * self)
+coapType CoAP_getType (coapMsg * msg)
 {
-	return (coapType)((self->header & H_TYPE_MASK) >> 4);
+	return (coapType)((msg->header & H_TYPE_MASK) >> 4);
 }
 
-unsigned char _GET_COAP_MSG_HEADER_TOKEN_LENGTH_ (coapMsg * self)
+uint8_t CoAP_getTokenLength (coapMsg * msg)
 {
-	return self->header & H_TKL_MASK;
+	return (uint8_t)(msg->header & H_TKL_MASK);
 }
 
 // Getters for the packed binary code
 
-coapCodeClass _GET_COAP_MSG_CODE_CLASS_ (coapMsg * self)
+coapCodeClass CoAP_getCodeClass (coapMsg * msg)
 {
 	coapCodeClass codeClass;
-	uint8_t bitValue = (self->code & CODE_CLASS_MASK) >> 5;
+	uint8_t bitValue = (msg->code & CODE_CLASS_MASK) >> 5;
 
 	switch (bitValue) {
 		case 0x00:
@@ -57,56 +63,80 @@ coapCodeClass _GET_COAP_MSG_CODE_CLASS_ (coapMsg * self)
 	return codeClass;
 }
 
-int _GET_COAP_MSG_CODE_DETAIL_ (coapMsg * self)
+uint8_t CoAP_getCodeDetail (coapMsg * msg)
 {
 	// Valid code detail values and semantics depend
 	// on the code class value the detail is coupled to,
 	// so fuck it, this is just a number.
 
-	int detail = self->code & CODE_DETAIL_MASK;
+	uint8_t detail = msg->code & CODE_DETAIL_MASK;
 	return detail;
 }
 
-coapCode _GET_COAP_MSG_CODE_ (coapMsg * self)
+coapCode CoAP_getCode (coapMsg * msg)
 {
 	coapCode code;
-	code.codeClass = self->codeClass(self);
-	code.codeDetail = self->codeDetail(self);
+	code.codeClass = CoAP_getCodeClass(msg);
+	code.codeDetail = CoAP_getCodeDetail(msg);
 	return code;
 }
 
 // Getters for the other, more difficult, parts
+
+/* Options not implemented for initial beta
 
 unsigned char _GET_COAP_MSG_OPTIONS_ (coapMsg * self)
 {
 	#error --- Get Option Not Implemented ---
 }
 
-unsigned char _GET_COAP_MSG_PAYLOAD_ (coapMsg * self)
+*/
+
+uint8_t CoAP_bufferPayload (coapMsg * msg, payloadBuffer * pb)
 {
-	#error --- Get Payload Not Implemented ---
+	uint8_t payloadSize = msg->msgSize - (COAP_HEADER_SIZE + CoAP_getTokenLength(msg));
+	uint8_t optValue = 0x00;
+	uint8_t optLength = 0x00;
+	unsigned char * loc = msg->body;
+	do {
+		optValue += (*loc) >> 4;
+		if (optValue == 0x0D || optValue == 0x0E) {
+			return 0; // This is an error for now.
+		} else if (optValue != 0x0F) {
+			optLength = (*loc) & 0x0F;
+			loc += optLength;
+			payloadSize -= optLength;
+		}
+		loc++;
+		payloadSize--;
+	} while ((optValue != 0x0F) && (loc < (msg + msg->msgSize)));
+
+	if (optLength == 0x0F) {
+		memcpy(pb->buffer, loc, payloadSize);
+	}
+	return payloadSize;
 }
 
 // CoAP Message Header Setters
 // Version is always 1, so there's no setter for now.
 
-void _SET_COAP_MSG_HEADER_TYPE_ (coapMsg * self, coapType t)
+void CoAP_setType (coapMsg * msg, coapType t)
 {
 	unsigned char typeBytes = ((unsigned char)t) << 4;
-	self->header &= ~H_TYPE_MASK;
-	self->header += typeBytes;
+	msg->header &= ~H_TYPE_MASK;
+	msg->header += typeBytes;
 }
 
-void _SET_COAP_MSG_MESSAGE_ID_ (coapMsg * self, uint16_t msgId)
+void CoAP_setMessageID (coapMsg * msg, uint16_t msgId)
 {
-	self->msgID = msgId;
+	msg->msgID = msgId;
 }
 
-voidError _SET_COAP_MSG_HEADER_TOKEN_LENGTH_ (coapMsg * self, 
+voidError CoAP_setTokenLength (coapMsg * msg, 
 												uint8_t tokenLength)
 {
-	self->header &= ~H_TKL_MASK;
-	self->header += (tokenLength < MAX_TOKEN_LENGTH)
+	msg->header &= ~H_TKL_MASK;
+	msg->header += (tokenLength < MAX_TOKEN_LENGTH)
 					? tokenLength : MAX_TOKEN_LENGTH;
 	if (tokenLength > MAX_TOKEN_LENGTH) {
 		return true;
@@ -114,14 +144,17 @@ voidError _SET_COAP_MSG_HEADER_TOKEN_LENGTH_ (coapMsg * self,
 	return false;
 }
 
-void _SET_COAP_MSG_TOKEN_ (coapMsg * self, unsigned char token[8])
+void CoAP_setToken (coapMsg * msg, unsigned char * token)
 {
-	memcpy(self->token, token, 8);
+	memcpy(msg->token, token, 8);
 }
 
-void _GENERATE_COAP_MSG_TOKEN_ (coapMsg * self)
+void CoAP_genToken (coapMsg * msg)
 {
-	#error --Token Generation Not Implemented --
+	uint8_t i;
+	for (i = 0; i < 8; i++) {
+		msg->token[i] = (unsigned char)(*rng)();
+	}
 }
 
 // Parser for turning packets into coapMsg structs
@@ -151,42 +184,21 @@ voidError parsePacketToCOAPMsg (coapMsg * dest, unsigned char * source, size_t p
 	dest->msgSize = packetSize;
 }
 
-/*
-
-voidError writeCoapMsgPayload(coapMsg * msg, unsigned char * payload, uint8_t p_size)
-{
-	memcpy(msg->payload, payload, p_size);
-	return false;
+void CoAP_packMessage(packedMsg * dest, coapMsg * msg) {
+	memcpy(dest, msg, COAP_HEADER_SIZE + CoAP_getTokenLength(msg));
+	memcpy(dest + COAP_HEADER_SIZE + CoAP_getTokenLength(msg), msg->body, msg->msgSize - (COAP_HEADER_SIZE + CoAP_getTokenLength(msg)));
+	dest->size = msg->msgSize;
 }
 
-void genCoapMsgToken(coapMsg * msg)
-{
-	return;
+void CoAP_unpackMessage(coapMsg * dest, packedMsg * source) {
+	if (source->size >=4) {
+		dest->header = source->msg[0];
+		dest->code = source->msg[1];
+		dest->msgID = (source->msg[2] << 8) + source->msg[3];
+		memcpy(dest->token, source->msg + COAP_HEADER_SIZE, dest->header & H_TKL_MASK);
+		memcpy(dest->body, source->msg + COAP_HEADER_SIZE + (dest->header & H_TKL_MASK), source->size - (COAP_HEADER_SIZE + (dest->header & H_TKL_MASK)));
+		dest->msgSize = source->size;
+	}
 }
 
-// Parser function for incoming messages
 
-void parseOption(coapMsg * msg, uint8_t loc)
-{
-	return;
-}
-
-coapMsgCode parseCode(uint8_t code_byte)
-{
-	coapMsgCode code;
-	code.class = code_byte >> 5;
-	code.detail = (code_byte << 3) >> 3;
-
-	return code;
-}
-
-void parseCoapMsg(coapMsg * dest, char * source, uint8_t size)
-{
-	msg->header->version = *source >> 6;
-	msg->header->type = (*source << 2) >> 6;
-	msg->header->tkl = (*source << 4) >> 4;
-	msg->header->code = parseCode(*(source + 1));
-	msg->header->msgID = ;
-}
-
-*/
