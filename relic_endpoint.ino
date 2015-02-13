@@ -2,6 +2,7 @@
 //#include <RFID.h>
 #include <Ethernet.h>
 #include <EthernetUdp.h>
+#include <string.h>
 #include "CoAP.h"
 
 #define DEBUG
@@ -14,33 +15,47 @@
 // On Linux Mint, the libraries are in usr/share/arduino/libraries
 #endif
 
+int freeRam ()
+{
+ extern int __heap_start, *__brkval;
+ int v;
+ return (int) &v - (__brkval == 0 ? (int) &__heap_start : (int) __brkval);
+}
+
 static unsigned char mac[] = {
   0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };
 
 static const unsigned int localPort = 5683;
 
 unsigned char incomingBuffer[UDP_TX_PACKET_MAX_SIZE];
-char outgoingBuffer[UDP_TX_PACKET_MAX_SIZE];
+unsigned char outgoingBuffer[UDP_TX_PACKET_MAX_SIZE];
 
 EthernetUDP Udp;
 
 #ifdef DEBUG
 
-void printDebug()
-{
-	return;
-}
+IPAddress ip(10, 0, 0, 10);
+
+static unsigned char fakeRFID[] = {
+	0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10 };
+static unsigned char deviceID[] = {0x01, 0x02, 0x03, 0x04};
+static unsigned char fakeHeader[] = {0x00, 0xA0};
+static unsigned char fakeIV[] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+
+static coapMsg testMsg;
+static packedMsg testPMsg;
 
 #endif
 
 void setup() 
 {
 	Serial.begin(9600);
-
+	Serial.println(freeRam());
 	#ifdef DEBUG
 	Serial.println("System initialized.  Aquiring IP Address.");
 	#endif
-
+	pinMode(4, OUTPUT);
+	digitalWrite(4, HIGH);
 	if (Ethernet.begin(mac) == 0) {
 		#ifdef DEBUG
 		Serial.println("Error occured with DHCP");
@@ -55,47 +70,40 @@ void setup()
 	Udp.begin(localPort);
 	
 	#ifdef DEBUG
-	Serial.print("Listenting on port ");
+	Serial.print("Listening on port ");
 	Serial.println(localPort);
+
+	testMsg.header = 0x5F;
+	testMsg.code = 0x00;
+	testMsg.msgID = 0x0001;
+	memcpy(testMsg.token, fakeIV, 8);
+	memcpy(testMsg.body, deviceID, 4);
+	memcpy(testMsg.body + 4, fakeRFID, 16);
+	testMsg.msgSize = 46;
+
+	CoAP_packMessage(&testPMsg, &testMsg);
+
 	#endif
 }
 
-void loop() 
-{
-	int packetSize = Udp.parsePacket();
-	if (packetSize) {
-		Serial.print("Recieved packet of size: ");
-		Serial.println(packetSize);
-		Serial.print("From ");
-		IPAddress remote = Udp.remoteIP();
-		for (int i = 0; i < 4; i++) {
-			Serial.print(remote[i], DEC);
-			if (i < 3) {
-				Serial.print(".");
-			}
-		}
-			Serial.print(":");
-			Serial.println(Udp.remotePort());
-
-		Udp.read(incomingBuffer, UDP_TX_PACKET_MAX_SIZE);
-		Serial.println("Contents");
-		int printLen = (packetSize > UDP_TX_PACKET_MAX_SIZE) ? 
-			UDP_TX_PACKET_MAX_SIZE : packetSize;
-		for (int i = 0; i < printLen; i++) {
-			if (incomingBuffer[i] <= 0xF) {
-				Serial.print("0");
-			}
-			Serial.print(incomingBuffer[i], HEX);
-			Serial.print(":");
-			if ((i > 0) && ((i+1) % 8 == 0)) {
-				Serial.println("");
-			}
-		}
-		Serial.println("");
-
-		//Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());
-		//Udp.write(outgoingBuffer);
-		//Udp.endPacket();
+void loop() {
+	#ifdef DEBUG
+	int i;
+	for (i=0; i < UDP_TX_PACKET_MAX_SIZE; i++) {
+		outgoingBuffer[i] = 0x00;
 	}
-	delay(10);
+	memcpy(outgoingBuffer, fakeHeader, 2);
+	memcpy(outgoingBuffer + 2, fakeIV, 8);
+	memcpy(outgoingBuffer + 10, testPMsg.msg, 46);
+
+	int error = Udp.beginPacket(ip, 5683);
+	if (error != 0) {
+		error = Udp.write(outgoingBuffer, UDP_TX_PACKET_MAX_SIZE);
+		if (error != 0) {
+			error = Udp.endPacket();
+			if (error != 0) {}
+		}
+	}
+	#endif
+	delay(1);
 }

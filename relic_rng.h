@@ -6,7 +6,14 @@
 #include <Arduino.h>
 #include "relic_tea_core.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 void initializeRNG(int);
 uint8_t rand_val();
+#ifdef __cplusplus
+}
+#endif //extern "C"
 
 #endif

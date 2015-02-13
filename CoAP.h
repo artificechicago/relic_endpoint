@@ -47,13 +47,20 @@ typedef struct _PAYLOAD_BUFFER_ {
 	uint8_t size;
 } payloadBuffer;
 
+#ifdef __cplusplus
+extern "C"{
+#endif
+	
 void initCoAP(RNG rng);
 coapCodeClass CoAP_getCodeClass(struct _COAP_MSG_ *);
 uint8_t CoAP_getCodeDetail(struct _COAP_MSG_ *);
 
+void CoAP_packMessage(packedMsg *, coapMsg *);
 voidError parsePacketToCoAPMsg(struct _COAP_MSG_ *, unsigned char *, size_t);
 
 
 void parseCoapMsg(coapMsg *, char *, uint8_t);
-
+#ifdef __cplusplus
+}
+#endif // extern "C"
 #endif

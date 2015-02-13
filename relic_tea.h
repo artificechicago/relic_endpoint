@@ -18,7 +18,14 @@ typedef struct _TEA_CRYPTO {
 	void (*MAC)(uint32_t *, uint16_t);
 } Crypto;
 
+#ifdef __cplusplus
+extern "C"{
+#endif
+
 Crypto * initializeCrypto(RNG, uint32_t *);
 void cryptoSetNewKey(uint32_t *);
 
+#ifdef __cplusplus
+}
+#endif //extern "C"
 #endif
