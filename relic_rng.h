@@ -6,6 +6,8 @@
 #include <Arduino.h>
 #include "relic_tea_core.h"
 
+typedef uint8_t (*RNG)();
+
 #ifdef __cplusplus
 extern "C" {
 #endif

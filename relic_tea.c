@@ -79,7 +79,7 @@ void _CBC_DECRYPT_BASE_MODE (uint32_t * msgIn, uint16_t len, uint32_t * IV, uint
 
 // Interface and set-up functions
 
-void _CBC_Encypt (uint32_t * msg, uint16_t len) {
+void _CBC_Encypt () {
 	uint32_t IV[2];
 	IV[0] = _relic_tea_interface.rng() << 24 |
 					_relic_tea_interface.rng() << 16 |
@@ -89,38 +89,46 @@ void _CBC_Encypt (uint32_t * msg, uint16_t len) {
 					_relic_tea_interface.rng() << 16 |
 					_relic_tea_interface.rng() << 8 |
 					_relic_tea_interface.rng();
-
-	_CBC_ENCRYPT_BASE_MODE(_relic_tea_interface.MessageBuffer, 
-							len, 
+	_CBC_ENCRYPT_BASE_MODE((uint32_t *)_relic_tea_interface.MessageBuffer, 
+							ENCRYPTION_MESSAGE_BUFFER_SIZE/4, 
 							IV, 
 							_relic_tea_interface.key,
-							_relic_tea_interface.MessageBuffer,
+							(uint32_t *)_relic_tea_interface.MessageBuffer,
 							NULL);
 }
 
 void _CBC_Decrypt (uint32_t * ct, uint16_t len, uint32_t * IV) {
-	_CBC_DECRYPT_BASE_MODE (_relic_tea_interface.MessageBuffer, 
+	uint16_t copyLen = len <= ENCRYPTION_MESSAGE_BUFFER_SIZE ? len : ENCRYPTION_MESSAGE_BUFFER_SIZE;
+	memcpy(_relic_tea_interface.MessageBuffer, ct, copyLen);
+	_CBC_DECRYPT_BASE_MODE ((uint32_t *)_relic_tea_interface.MessageBuffer, 
 							len,
 							IV, 
 							_relic_tea_interface.key, 
-							_relic_tea_interface.MessageBuffer);
+							(uint32_t *)_relic_tea_interface.MessageBuffer);
 }
 
 void _CBC_MAC (uint32_t * msg, uint16_t len) {
 	uint32_t IV[2] = {0x00000000, 0x00000000};
-	_CBC_ENCRYPT_BASE_MODE(_relic_tea_interface.MessageBuffer, 
+	_CBC_ENCRYPT_BASE_MODE((uint32_t *)_relic_tea_interface.MessageBuffer, 
 							len, 
 							IV, 
 							_relic_tea_interface.MACKey,
-							_relic_tea_interface.MessageBuffer,
-							_relic_tea_interface.MACBuffer);
+							(uint32_t *)_relic_tea_interface.MessageBuffer,
+							(uint32_t *)_relic_tea_interface.MACBuffer);
 }
 
-void cryptoSetNewKey(uint32_t * newKey) {
+void _Crypto_SetNewKey(uint32_t * newKey) {
 	_relic_tea_interface.key[0] = *newKey;
 	_relic_tea_interface.key[1] = *(newKey+1);
 	_relic_tea_interface.key[2] = *(newKey+2);
 	_relic_tea_interface.key[3] = *(newKey+3);
+}
+
+void _Crypto_SetMACKey(uint32_t * newMACKey) {
+	_relic_tea_interface.MACKey[0] = *newMACKey;
+	_relic_tea_interface.MACKey[1] = *(newMACKey+1);
+	_relic_tea_interface.MACKey[2] = *(newMACKey+2);
+	_relic_tea_interface.MACKey[3] = *(newMACKey+3);
 }
 
 Crypto * initCrypto(RNG rng, uint32_t * key) {
@@ -129,6 +137,8 @@ Crypto * initCrypto(RNG rng, uint32_t * key) {
 	_relic_tea_interface.encrypt = &_CBC_Encypt;
 	_relic_tea_interface.decrypt = &_CBC_Decrypt;
 	_relic_tea_interface.MAC = &_CBC_MAC;
+	_relic_tea_interface.setKey = &_Crypto_SetNewKey;
+	_relic_tea_interface.setMACKey = &_Crypto_SetMACKey;
 
 	return &_relic_tea_interface;
 }

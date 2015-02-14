@@ -4,6 +4,8 @@
 #include <EthernetUdp.h>
 #include <string.h>
 #include "CoAP.h"
+#include "relic_rng.h"
+#include "relic_tea.h"
 
 #define DEBUG
 
@@ -41,21 +43,26 @@ static unsigned char fakeRFID[] = {
 static unsigned char deviceID[] = {0x01, 0x02, 0x03, 0x04};
 static unsigned char fakeHeader[] = {0x00, 0xA0};
 static unsigned char fakeIV[] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-
+static uint32_t deviceKey[] = {0, 0, 0, 0};
 static coapMsg testMsg;
 static packedMsg testPMsg;
+static RNG rng;
+static Crypto * crypto;
 
 #endif
 
 void setup() 
 {
+	initializeRNG(A0);
+	rng = &rand_val;
+	initCoAP(rng);
+	crypto = initCrypto(rng, deviceKey);
 	Serial.begin(9600);
 	Serial.println(freeRam());
 	#ifdef DEBUG
 	Serial.println("System initialized.  Aquiring IP Address.");
 	#endif
-	pinMode(4, OUTPUT);
-	digitalWrite(4, HIGH);
+
 	if (Ethernet.begin(mac) == 0) {
 		#ifdef DEBUG
 		Serial.println("Error occured with DHCP");
@@ -82,7 +89,7 @@ void setup()
 	testMsg.msgSize = 46;
 
 	CoAP_packMessage(&testPMsg, &testMsg);
-
+	Serial.println(freeRam());
 	#endif
 }
 
@@ -94,7 +101,11 @@ void loop() {
 	}
 	memcpy(outgoingBuffer, fakeHeader, 2);
 	memcpy(outgoingBuffer + 2, fakeIV, 8);
-	memcpy(outgoingBuffer + 10, testPMsg.msg, 46);
+	Serial.println("Start Crypto Test");
+	memcpy(crypto->MessageBuffer, testPMsg.msg, testPMsg.size);
+	crypto->encrypt();
+	memcpy(testPMsg.msg, crypto->MessageBuffer, testPMsg.size);
+	memcpy(outgoingBuffer + 10, testPMsg.msg, testPMsg.size);
 
 	int error = Udp.beginPacket(ip, 5683);
 	if (error != 0) {
@@ -105,5 +116,5 @@ void loop() {
 		}
 	}
 	#endif
-	delay(1);
+	delay(2000);
 }
